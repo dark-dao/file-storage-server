@@ -10,7 +10,10 @@ import morgan from 'morgan';
 import bodyParser from 'body-parser';
 
 import config from './config';
-import {FileStorage} from './modules';
+import {
+  FileStorage,
+  Stats
+} from './modules';
 
 export default () => {
   app.use(function(req, res, next) {
@@ -54,5 +57,14 @@ app.delete('/file/:id', (req, res) => {
     res.status(200).json(success);
   }, (err) => {
     res.status(500).json(err);
+  });
+});
+
+app.get('/stats', (req, res) => {
+  const stats = new Stats();
+  stats.getStats().then((stats) => {
+    res.status(200).json(stats);
+  }, (error) => {
+    res.status(200).json(error);
   });
 });

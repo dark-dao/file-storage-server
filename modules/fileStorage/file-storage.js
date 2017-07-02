@@ -16,8 +16,8 @@ export default class FileStorage {
   constructor() {
 
   }
-  getByteToGb(gb) {
-    return Math.pow(2, 9)
+  getByteToGb(byte) {
+    return Math.floor(byte / Math.pow(1024, 3));
   }
   checkDiskSpace() {
     return new Promise ( (resolve, reject) => {
@@ -28,11 +28,11 @@ export default class FileStorage {
             message: err
           });
         } else {
-          const space = result.free;
-          if(space > this.getByteToGb(config.minFreeSpaceGb)) {
+          const freeSpaceGb = this.getByteToGb(result.free);
+          if(freeSpaceGb > config.minFreeSpaceGb) {
             resolve({
               success: true,
-              freeSpace: result.free
+              freeSpaceGb: freeSpaceGb
             });
           } else {
             reject({
@@ -56,7 +56,8 @@ export default class FileStorage {
         } else {
           reject({
             success: false,
-            message: err
+            message: 'File not found',
+            error: err
           });
         }
       });
