@@ -46,3 +46,40 @@ Simple service of file storage.
     "message":"File is deleted!"
   }
 ```
+
+#### Get statistic
+*Request*
+```
+  GET localhost:5007/stat
+```
+*Response*
+```json
+  {
+    "success":true,
+    "freeSpaceGb":117,
+    "totalSpaceGb":238,
+    "usedSpaceGb":121,
+    "numbersOfFiles":23
+  }
+```
+*Response if free disk space ends*
+```json
+  {
+    "success":true,
+    "freeSpaceGb":117,
+    "totalSpaceGb":238,
+    "usedSpaceGb":121,
+    "numbersOfFiles":23,
+    "message": "Free space ends!"
+  }
+```
+*Response if not enough disk space*
+```json
+  {
+    "success":false,
+    "freeSpaceGb":117,
+    "totalSpaceGb":238,
+    "usedSpaceGb":121,
+    "message": "Not enough disk space!"
+  }
+```

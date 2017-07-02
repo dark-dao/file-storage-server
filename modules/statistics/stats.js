@@ -48,7 +48,7 @@ export default class Stats {
 
           const minDiffGb = 3;
           const diffGb = freeSpaceGb - config.minFreeSpaceGb;
-          
+
           if(diffGb < minDiffGb) {
             resolve({
               success: true,
@@ -68,8 +68,10 @@ export default class Stats {
           } else {
             resolve({
               success: false,
-              freeSpaceGb: freeSpaceGb,
-              message: 'Not enough disk space'
+              freeSpaceGb,
+              totalSpaceGb,
+              usedSpaceGb
+              message: 'Not enough disk space!'
             });
           }
         }
