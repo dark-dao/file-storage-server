@@ -1,23 +1,26 @@
 'use strict';
 import Promise from 'bluebird';
-
 import multer from 'multer';
 import uuidV4 from 'uuid/v4';
 import fs from 'fs';
 import diskspace from 'diskspace';
-import _ from 'lodash';
+import { map } from 'lodash';
+
+import config from '../../config';
 
 import EncryptFile from './file-encrypt';
 import DecryptFile from './file-decrypt';
 
-import config from '../../config';
-
 export default class FileStorage {
-  constructor() {
-
+  constructor(clientKey) {
+    this.clientKey = clientKey;
+    this.uploadFileName = '';
   }
   getByteToGb(byte) {
     return Math.floor(byte / Math.pow(1024, 3));
+  }
+  getMbToByte(Mb) {
+    return Math.floor(Mb * Math.pow(1024, 2));
   }
   checkDiskSpace() {
     return new Promise ( (resolve, reject) => {
@@ -46,8 +49,8 @@ export default class FileStorage {
   }
   checkFile(id) {
     return new Promise ( (resolve, reject) => {
-      const { storagePath, specialExtencion } = config;
-      fs.stat(`${storagePath}/${id}${specialExtencion}`, (err, stats) => {
+      const { storagePath, specialExtension } = config;
+      fs.stat(`${storagePath}/${id}${specialExtension}`, (err, stats) => {
         if(err == null) {
           resolve({
             success: true,
@@ -65,7 +68,7 @@ export default class FileStorage {
   }
   checkMimeType(type) {
     let isExist = false;
-    _.map(config.mimeTypes, item => {
+    map(config.mimeTypes, item => {
       if(item === type) {
         isExist = true;
       }
@@ -75,8 +78,8 @@ export default class FileStorage {
   delete(id) {
     return new Promise ( (resolve, reject) => {
       this.checkFile(id).then((isExist) => {
-        const { storagePath, specialExtencion } = config;
-        fs.unlink(`${storagePath}/${id}${specialExtencion}`, (err) => {
+        const { storagePath, specialExtension } = config;
+        fs.unlink(`${storagePath}/${id}${specialExtension}`, (err) => {
           if(err) {
             reject({
               success: false,
@@ -98,16 +101,24 @@ export default class FileStorage {
   get(id) {
     return new Promise ( (resolve, reject) => {
       this.checkFile(id).then((isExist) => {
-        const { storagePath, specialExtencion } = config;
-        const fullFilePath = `${storagePath}/${id}${specialExtencion}`;
-        const decryptFile = new DecryptFile(fullFilePath);
-        decryptFile.on().then((result) => {
-          resolve(result);
+        const { storagePath, specialExtension } = config;
+        const fullFilePath = `${storagePath}/${id}${specialExtension}`;
+        const decryptFile = new DecryptFile(fullFilePath, this.clientKey);
+
+        return decryptFile.on().then((result) => {
+          return resolve(result);
         }, (error) => {
-          reject(error);
+          return reject(error);
+        }).catch((error) => {
+          return reject();
         });
-      }, (err) => {
-        reject(err);
+      }, (error) => {
+        return reject(error);
+      }).catch((error) => {
+        return reject({
+          success: false,
+          error: error
+        });
       });
     });
   }
@@ -116,19 +127,8 @@ export default class FileStorage {
       this.checkDiskSpace().then((freeSpace) => freeSpace, (err) => {
         reject(err);
       }).then((space) => {
-
-        const fileName = uuidV4();
-        const fullFilePath = `${config.storagePath}/${fileName}`;
-        const ecryptFile = new EncryptFile(fileName, fullFilePath);
-
-        let storage = multer.diskStorage({
-          destination: function (req, file, cb) {
-            cb(null, config.storagePath);
-          },
-          filename: function (req, file, cb) {
-              cb(null, fileName);
-          }
-        });
+        let filename = uuidV4();
+        let self = this;
 
         let fileFilter = (req, file, cb) => {
           const isAvailableType = this.checkMimeType(file.mimetype);
@@ -143,21 +143,41 @@ export default class FileStorage {
           }
         };
 
+        let storage = multer.diskStorage({
+          destination: function (req, file, cb) {
+            cb(null, config.storagePath);
+          },
+          filename: function (req, file, cb) {
+            cb(null, filename);
+          }
+        });
+
         let uploadFile = multer({
           dest: config.storagePath,
           storage: storage,
-          fileFilter: fileFilter
+          fileFilter: fileFilter,
+          limits: {
+            fileSize: this.getMbToByte(config.maxFileSize) //Mb to bytes
+          }
         }).single(config.requestFieldName);
 
-        uploadFile(req, res, function (err) {
-          if (err) {
+        uploadFile(req, res, function (error) {
+          if (error) {
             reject({
               success: false,
-              message: err
+              message: 'Error upload file!',
+              error: error
             });
           } else {
+            const fullFilePath = `${config.storagePath}/${filename}`;
+            const ecryptFile = new EncryptFile(filename, fullFilePath, self.clientKey);
             ecryptFile.on().then(success => resolve(success), error => reject(error));
           }
+        });
+      }).catch((error) => {
+        reject({
+          success: false,
+          error: error
         });
       });
     });

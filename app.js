@@ -1,70 +1,58 @@
 'use strict';
-
+import cluster from 'cluster';
 import express from 'express';
 import cors from 'cors';
-
-let app = express();
-let privateApp = express();
-
+import fs from 'fs';
 import morgan from 'morgan';
 import bodyParser from 'body-parser';
 
 import config from './config';
 import {
-  FileStorage,
-  Stats
+  Router
 } from './modules';
 
 export default () => {
-  app.use(function(req, res, next) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, If-None-Match, X-Requested-With, Content-Type, Accept, X-Access-Token");
-    next();
-  });
-  app.use(cors());
-  app.use(bodyParser.urlencoded({extended: false}));
-  app.use(bodyParser.json());
-  app.use(morgan('dev')); // log every request to the console
-  app.listen(config.port, () => {
-    console.log(`File server is running on ${config.port} port`);
-  });
+  if (cluster.isMaster) {
+    let timeout;
+    for(let i = 0; i < 3; i++) {
+      cluster.fork();
+    }
+    cluster.on('disconnect', (worker, code, signal) => {
+      clearTimeout(timeout);
+      console.log('Отключен воркер с id: ', worker.id);
+      cluster.fork();
+    });
+    cluster.on('exit', (worker, code, signal) => {
+      console.log('Сингнал выхода из процесса от воркера с id: ', worker.id);
+      worker.disconnect();
+      timeout = setTimeout(() => {
+        worker.kill();
+      }, 2000);
+    });
+  } else {
+    process.on('uncaughtException', e => {
+      console.log(e);
+      process.exit();
+    });
+    let server = express();
+    server.use((req, res, next) => {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header("Access-Control-Allow-Headers", "Origin, If-None-Match, X-Requested-With, Content-Type, Accept, X-Access-Token");
+      next();
+    });
+    server.use(cors());
+    server.use(bodyParser.urlencoded({extended: false}));
+    server.use(bodyParser.json());
+    server.use(morgan('dev'));
+
+    Router(server);
+
+    server.listen(config.port, (error) => {
+      if(error) {
+        console.log(`File server is not run! Error: `, error);
+      } else {
+        console.log(`File server is running on ${config.port} port. Worker id: ${cluster.worker.id}`);
+      }
+    });
+  }
 };
-
-app.get('/file/:id', (req, res) => {
-  const imgId = req.params.id;
-  const getFile = new FileStorage().get(imgId);
-  getFile.then((result) => {
-    res.writeHead(200,{'Content-type':result.mime});
-    res.end(result.file);
-  }, (err) => {
-    res.status(500).json(err);
-  });
-});
-
-app.post('/file',  (req, res) => {
-  const uploadFile = new FileStorage().upload(req, res);
-  uploadFile.then((success) => {
-    res.status(200).json(success);
-  }, (err) => {
-    res.status(500).json(err);
-  });
-});
-
-app.delete('/file/:id', (req, res) => {
-  const imgId = req.params.id;
-  const deleteFile = new FileStorage().delete(imgId);
-  deleteFile.then((success) => {
-    res.status(200).json(success);
-  }, (err) => {
-    res.status(500).json(err);
-  });
-});
-
-app.get('/stats', (req, res) => {
-  const stats = new Stats();
-  stats.getStats().then((stats) => {
-    res.status(200).json(stats);
-  }, (error) => {
-    res.status(200).json(error);
-  });
-});

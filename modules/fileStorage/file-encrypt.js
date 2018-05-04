@@ -1,15 +1,16 @@
 'use strict';
-
 import Promise from 'bluebird';
+import zlib from 'zlib';
 import fs from 'fs';
 import crypto from 'crypto';
 
 import config from '../../config';
 
 export default class EncryptFile {
-  constructor(fileName, fileUrl) {
+  constructor(fileName, fileUrl, clientKey) {
     this.fileName = fileName;
     this.fileUrl = fileUrl;
+    this.clientKey = clientKey;
   }
   on() {
     return new Promise ( (resolve, reject) => {
@@ -17,11 +18,13 @@ export default class EncryptFile {
       const fileUrl = this.fileUrl;
       fs.stat(fileUrl, (err, stats) => {
         if(err == null) {
-          let cipher = crypto.createCipher('aes-256-cbc', config.key);
+          let encrypt = crypto.createCipher('aes-256-cbc', this.clientKey);
           let input = fs.createReadStream(fileUrl);
-          let output = fs.createWriteStream(`${fileUrl}${config.specialExtencion}`);
+          let output = fs.createWriteStream(`${fileUrl}${config.specialExtension}`);
+          const gzip = zlib.createGzip();
 
-          input.pipe(cipher).pipe(output);
+          input.pipe(gzip).pipe(encrypt).pipe(output);
+
           output.on('finish', function() {
             fs.unlink(fileUrl, (err) => {
               if(err) {

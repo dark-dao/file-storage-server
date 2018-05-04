@@ -2,6 +2,7 @@
 import Promise from 'bluebird';
 import fs from 'fs';
 import diskspace from 'diskspace';
+
 import config from '../../config';
 
 export default class Stats {
@@ -70,7 +71,7 @@ export default class Stats {
               success: false,
               freeSpaceGb,
               totalSpaceGb,
-              usedSpaceGb
+              usedSpaceGb,
               message: 'Not enough disk space!'
             });
           }
